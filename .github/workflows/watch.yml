@@ -1,0 +1,48 @@
+name: watch-guidelines
+
+on:
+  schedule:
+    - cron: "0 0 * * 1" # 毎週月曜 09:00 JST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - id: check
+        run: |
+          set +e
+          out=$(npx tsx scripts/check-updates.ts 2>&1)
+          code=$?
+          echo "$out"
+          {
+            echo "report<<REPORT"
+            echo "$out"
+            echo "REPORT"
+          } >> "$GITHUB_OUTPUT"
+          exit 0
+          # code は下のステップで使う
+        continue-on-error: true
+      - if: contains(steps.check.outputs.report, '[')
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `掲載ページとの差分を検知しました。\n\n\`\`\`\n${{ toJSON(steps.check.outputs.report) }}\n\`\`\`\n\n原本を確認し、\`npm run data\` を実行して data/ を更新してください。`;
+            const title = "ガイドラインの更新を検知";
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner, repo: context.repo.repo, state: "open", labels: "guideline-update",
+            });
+            if (existing.data.some(i => i.title === title)) return;
+            await github.rest.issues.create({
+              owner: context.repo.owner, repo: context.repo.repo,
+              title, body, labels: ["guideline-update"],
+            });

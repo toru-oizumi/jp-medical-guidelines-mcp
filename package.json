@@ -1,0 +1,40 @@
+{
+  "name": "jp-medical-guidelines-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Japan's medical information security guidelines (3省2ガイドライン): MHLW 医療情報システムの安全管理に関するガイドライン and MIC/METI 提供事業者における安全管理ガイドライン",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "jp-medical-guidelines-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "data",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit -p tsconfig.scripts.json",
+    "dev": "tsx src/index.ts",
+    "fetch": "tsx scripts/fetch.ts",
+    "extract": "tsx scripts/extract.ts",
+    "xlsx": "tsx scripts/xlsx.ts",
+    "data": "npm run fetch && npm run extract && npm run xlsx",
+    "check-updates": "tsx scripts/check-updates.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "exceljs": "^4.4.0",
+    "pdfjs-dist": "^6.3.289",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}

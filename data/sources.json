@@ -1,0 +1,36 @@
+{
+  "$comment": "各編・各ファイル単位で版と公表日を持つ。厚労省は編ごとに公表日がずれるため、ファイル単位が最小単位。sha256 は npm run fetch が埋める。",
+  "guidelines": [
+    {
+      "id": "mhlw-7.0",
+      "title": "医療情報システムの安全管理に関するガイドライン",
+      "publisher": "厚生労働省",
+      "edition": "7.0",
+      "landingPage": "https://www.mhlw.go.jp/stf/shingi/0000516275_00006.html",
+      "documents": [
+        { "key": "overview",    "book": "概説編",         "published": "2026-06", "url": "https://www.mhlw.go.jp/content/10808000/001716290.pdf", "sha256": null },
+        { "key": "governance",  "book": "経営管理編",     "published": "2026-06", "url": "https://www.mhlw.go.jp/content/10808000/001716291.pdf", "sha256": null },
+        { "key": "planning",    "book": "企画管理編",     "published": "2026-05", "url": "https://www.mhlw.go.jp/content/10808000/001716292.pdf", "sha256": null },
+        { "key": "operations",  "book": "システム運用編", "published": "2026-06", "url": "https://www.mhlw.go.jp/content/10808000/001716295.pdf", "sha256": null },
+        { "key": "maintenance", "book": "保守委託機関編", "published": null,      "url": "https://www.mhlw.go.jp/content/10808000/001716297.pdf", "sha256": null }
+      ],
+      "checklists": [
+        { "key": "checklist-pdf",      "kind": "pdf",  "title": "医療機関・薬局におけるサイバーセキュリティ対策チェックリスト", "published": "2026-06", "url": "https://www.mhlw.go.jp/content/10808000/001716185.pdf",  "sha256": null },
+        { "key": "checklist-manual",   "kind": "pdf",  "title": "同 マニュアル",                    "published": "2026-06", "url": "https://www.mhlw.go.jp/content/10808000/001716186.pdf",  "sha256": null },
+        { "key": "checklist-hospital", "kind": "xlsx", "target": "hospital", "title": "同 チェックリスト（医療機関・薬局確認用）", "published": "2026-06", "url": "https://www.mhlw.go.jp/content/10808000/001716187.xlsx", "sha256": null },
+        { "key": "checklist-vendor",   "kind": "xlsx", "target": "vendor",   "title": "同 チェックリスト（事業者確認用）",         "published": "2026-06", "url": "https://www.mhlw.go.jp/content/10808000/001716188.xlsx", "sha256": null }
+      ]
+    },
+    {
+      "id": "mic-meti-2.0",
+      "title": "医療情報を取り扱う情報システム・サービスの提供事業者における安全管理ガイドライン",
+      "publisher": "総務省・経済産業省",
+      "edition": "2.0",
+      "landingPage": "https://www.meti.go.jp/policy/mono_info_service/healthcare/teikyoujigyousyagl.html",
+      "documents": [
+        { "key": "main", "book": "本編", "published": "2025-03-28", "url": "https://www.meti.go.jp/policy/mono_info_service/healthcare/01gl_20250328_rev1.pdf", "sha256": null }
+      ],
+      "checklists": []
+    }
+  ]
+}
