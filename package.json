@@ -19,6 +19,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit -p tsconfig.scripts.json",
+    "test": "node --import tsx --test scripts/lib/*.test.ts",
     "dev": "tsx src/index.ts",
     "fetch": "tsx scripts/fetch.ts",
     "extract": "tsx scripts/extract.ts",
