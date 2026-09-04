@@ -19,10 +19,11 @@ jobs:
           node-version: 22
       - run: npm ci
       - id: check
+        continue-on-error: true
         run: |
+          # 差分があれば exit 1。ここでは落とさず、出力を次のステップに渡す。
           set +e
           out=$(npx tsx scripts/check-updates.ts 2>&1)
-          code=$?
           echo "$out"
           {
             echo "report<<REPORT"
@@ -30,14 +31,23 @@ jobs:
             echo "REPORT"
           } >> "$GITHUB_OUTPUT"
           exit 0
-          # code は下のステップで使う
-        continue-on-error: true
       - if: contains(steps.check.outputs.report, '[')
         uses: actions/github-script@v7
+        env:
+          # 掲載ページから読んだ文字列が混ざるので、script に埋め込まず env で渡す
+          REPORT: ${{ steps.check.outputs.report }}
         with:
           script: |
-            const body = `掲載ページとの差分を検知しました。\n\n\`\`\`\n${{ toJSON(steps.check.outputs.report) }}\n\`\`\`\n\n原本を確認し、\`npm run data\` を実行して data/ を更新してください。`;
             const title = "ガイドラインの更新を検知";
+            const body = [
+              "掲載ページとの差分を検知しました。",
+              "",
+              "```",
+              process.env.REPORT,
+              "```",
+              "",
+              "原本を確認し、`npm run data` を実行して data/ を更新してください。",
+            ].join("\n");
             const existing = await github.rest.issues.listForRepo({
               owner: context.repo.owner, repo: context.repo.repo, state: "open", labels: "guideline-update",
             });

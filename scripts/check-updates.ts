@@ -17,17 +17,30 @@ const sources = JSON.parse(await readFile(join(DATA, "sources.json"), "utf8")) a
   guidelines: Guideline[];
 };
 
+/** 素の Node の UA だと弾く配信基盤があるので、名乗る。fetch.ts と同じ。 */
+const UA = "jp-medical-guidelines-mcp/0.1 (+https://github.com/toru-oizumi/jp-medical-guidelines-mcp)";
+
 const findings: string[] = [];
 
 for (const g of sources.guidelines) {
   const known = new Set([...g.documents, ...g.checklists].map((d) => d.url));
 
-  const html = await (await fetch(g.landingPage)).text();
+  const page = await fetch(g.landingPage, { headers: { "user-agent": UA } });
+  if (!page.ok) {
+    // 取れなかった HTML をそのまま突き合わせると、全ファイルが「消えた」ことになる
+    findings.push(`[${g.id}] 掲載ページが取得できない: ${page.status} ${g.landingPage}`);
+    continue;
+  }
+  const html = await page.text();
   const linked = new Set(
     [...html.matchAll(/href="([^"]+\.(?:pdf|xlsx))"/gi)].map((m) =>
       new URL(m[1]!, g.landingPage).href,
     ),
   );
+  if (linked.size === 0) {
+    findings.push(`[${g.id}] 掲載ページに PDF/Excel のリンクが 1 つもない（構成が変わった可能性）`);
+    continue;
+  }
 
   for (const url of linked) {
     if (!known.has(url) && /(?:content|healthcare)\//.test(url)) {
@@ -40,7 +53,7 @@ for (const g of sources.guidelines) {
 
   for (const doc of [...g.documents, ...g.checklists]) {
     if (!doc.sha256) continue;
-    const res = await fetch(doc.url);
+    const res = await fetch(doc.url, { headers: { "user-agent": UA } });
     if (!res.ok) {
       findings.push(`[${g.id}/${doc.key}] 取得できない: ${res.status}`);
       continue;

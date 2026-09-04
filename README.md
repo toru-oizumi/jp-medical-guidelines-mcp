@@ -33,9 +33,28 @@ Resource: `guideline://{guideline}/{book}/{path}` で本文を直接読めます
 npm install
 npm run data     # 原本の取得 → PDF/Excel の構造化。data/ が生成される
 npm run build
+npm test         # 見出し分割のテスト
 ```
 
 `npm run data` は各省のサイトに直接アクセスします。data/raw/ は git 管理外です。
+
+社内プロキシやサンドボックスからは egress ポリシーで 403 になることがあります。
+その場合は原本を手で `data/raw/` に置いてください（`<guideline-id>__<key>.<pdf|xlsx>`、
+例 `mhlw-7.0__operations.pdf`）。以降の `extract` / `xlsx` はネットワークを使いません。
+
+### 抽出結果を確かめる
+
+```bash
+npx tsx scripts/extract.ts --report     # 書き出さずに監査結果だけ出す
+npx tsx scripts/xlsx.ts --inspect       # チェックリストの列と、COLUMNS の当たりを出す
+```
+
+`--report` は柱として落とした行・目次行・番号の飛び・重複した条項 id・
+見出しに見えて取れなかった行を出します。PDF のレイアウト依存が強いので、
+**見出しの正規表現を触る前にこれを見てください。**
+
+`xlsx.ts` は `COLUMNS` が原本のヘッダと食い違っていると、書き出さずに止まります
+（列が 1 つずれた JSON が静かに出来上がるのを防ぐため）。
 
 ### MCP クライアントの設定
 
@@ -68,8 +87,13 @@ npm run build
 
 ## Status
 
-初期スキャフォールドです。以下は**未検証**です。
+初期スキャフォールドです。パイプラインは合成 PDF・合成 Excel では通っていますが、
+**原本での確認が済んでいません。**
 
-- [ ] `scripts/extract.ts` の見出し検出（PDF のレイアウト依存が強い。要目視確認）
-- [ ] `scripts/xlsx.ts` の列マッピング（`npx tsx scripts/xlsx.ts --inspect` で原本の列を見てから調整）
+- [ ] `npm run data` を原本に対して実行（各省サイトへの到達が必要）
+- [ ] 見出し検出（`--report` の出力を目視してから正規表現を調整）
+- [ ] `scripts/xlsx.ts` の `COLUMNS` / `HEADER_ROWS`（`--inspect` の出力に合わせる）
 - [ ] 検索の精度（bigram の素朴な実装。必要なら BM25 か埋め込みに差し替える）
+
+設計の前提（条項 id は見出し番号ベース / 準拠判定はしない / 戻り値に出典必須）は
+[CLAUDE.md](CLAUDE.md) にあります。
