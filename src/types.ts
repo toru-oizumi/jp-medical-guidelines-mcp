@@ -17,6 +17,11 @@ export interface Section {
   text: string;
   /** 原本 PDF のページ（1 始まり、抽出時点の参考値） */
   page: number | null;
+  /**
+   * 抽出時に落とした表の行数。0 より大きければ、この条項には原本にしかない表がある。
+   * 「本文には出てこないが原本には書いてある」を黙らせないための印。
+   */
+  tableLines?: number;
   sourceUrl: string;
 }
 

@@ -81,6 +81,8 @@ for (const g of sources.guidelines) {
         heading: s.heading,
         text: s.lines.join("\n").trim(),
         page: s.page,
+        // 落とした表の行数。0 でなければ原本にしかない情報がここにある
+        tableLines: s.tableLines,
         sourceUrl: doc.url,
       });
     }
@@ -120,7 +122,7 @@ if (report) {
   }
 }
 
-type TextItem = { str: string; transform: number[]; height: number };
+type TextItem = { str: string; transform: number[]; height: number; width: number };
 
 /** PDF → 行の列。テキストは行単位で来ないので y 座標で束ねる。 */
 async function readLines(path: string): Promise<Line[]> {
@@ -146,13 +148,14 @@ async function readLines(path: string): Promise<Line[]> {
  * （固定値だと本文と見出しでずれ方が違う）。
  */
 function groupByLine(items: TextItem[], page: number, pageHeight: number): Line[] {
-  type Cell = { x: number; y: number; size: number; str: string };
+  type Cell = { x: number; y: number; w: number; size: number; str: string };
   const cells: Cell[] = [];
   for (const it of items) {
     if (!it.str || !it.str.trim()) continue;
     cells.push({
       x: it.transform[4]!,
       y: it.transform[5]!,
+      w: it.width ?? 0,
       size: Math.abs(it.transform[3]!) || it.height || 0,
       str: it.str,
     });
@@ -177,12 +180,13 @@ function groupByLine(items: TextItem[], page: number, pageHeight: number): Line[
         .join("")
         .replace(/\s+/g, " ")
         .trim();
-      return {
-        text,
-        page,
-        size: Math.max(...row.map((c) => c.size)),
-        yRatio: row[0]!.y / pageHeight,
-      };
+      const size = Math.max(...row.map((c) => c.size));
+      // 隣り合う文字の間隔の最大値。表の行は列が束ねられるのでここが大きくなる
+      let gap = 0;
+      for (let i = 1; i < sorted.length; i++) {
+        gap = Math.max(gap, sorted[i]!.x - (sorted[i - 1]!.x + sorted[i - 1]!.w));
+      }
+      return { text, page, size, yRatio: row[0]!.y / pageHeight, gap: size > 0 ? gap / size : 0 };
     })
     .filter((l) => l.text.length > 0);
 }
