@@ -14,34 +14,48 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
+          cache: npm
       - run: npm ci
+      # check-updates.ts は差分ありで exit 1、スクリプト自体の失敗（例外）は exit 1 以外で終わる。
+      # 例外のときに黙って成功扱いにならないよう、終了コードで分ける。
       - id: check
         run: |
           set +e
-          out=$(npx tsx scripts/check-updates.ts 2>&1)
+          npx tsx scripts/check-updates.ts > report.txt 2>&1
           code=$?
-          echo "$out"
-          {
-            echo "report<<REPORT"
-            echo "$out"
-            echo "REPORT"
-          } >> "$GITHUB_OUTPUT"
-          exit 0
-          # code は下のステップで使う
-        continue-on-error: true
-      - if: contains(steps.check.outputs.report, '[')
+          set -e
+          cat report.txt
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" -ne 0 ] && [ "$code" -ne 1 ]; then
+            echo "::error::check-updates.ts が異常終了しました (exit $code)"
+            exit "$code"
+          fi
+      - if: steps.check.outputs.code == '1'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
+          # レポートには掲載ページ由来の文字列が入るので、式展開でスクリプトに埋め込まずファイルから読む
           script: |
-            const body = `掲載ページとの差分を検知しました。\n\n\`\`\`\n${{ toJSON(steps.check.outputs.report) }}\n\`\`\`\n\n原本を確認し、\`npm run data\` を実行して data/ を更新してください。`;
+            const fs = require("node:fs");
+            const report = fs.readFileSync("report.txt", "utf8").slice(0, 60000);
+            const fence = "````";
+            const body = `掲載ページとの差分を検知しました。\n\n${fence}\n${report}\n${fence}\n\n` +
+              "原本を確認し、`npm run data` を実行して data/ を更新してください。";
             const title = "ガイドラインの更新を検知";
-            const existing = await github.rest.issues.listForRepo({
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner, repo: context.repo.repo, state: "open", labels: "guideline-update",
             });
-            if (existing.data.some(i => i.title === title)) return;
+            const same = existing.find((i) => i.title === title);
+            if (same) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo, issue_number: same.number, body,
+              });
+              return;
+            }
             await github.rest.issues.create({
               owner: context.repo.owner, repo: context.repo.repo,
               title, body, labels: ["guideline-update"],
