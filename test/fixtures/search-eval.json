@@ -1,0 +1,29 @@
+{
+  "$comment": "検索の評価用クエリ集。expected のいずれかが上位に来れば正解とする。期待値は見出しと本文を見て人が決めたもの（AI により作成・要レビュー）。",
+  "cases": [
+    { "query": "外部委託 責任分界", "expected": ["mhlw-6.0/governance/5.3", "mhlw-6.0/governance/1.3.2", "mhlw-6.0/planning/2.2.2", "mhlw-6.0/operations/3.4.2"] },
+    { "query": "バックアップ 世代管理", "expected": ["mhlw-6.0/operations/12.2"] },
+    { "query": "リモートアクセス 認証", "expected": ["mhlw-6.0/operations/7.2.1", "mhlw-6.0/operations/7.2"] },
+    { "query": "多要素認証", "expected": ["mhlw-6.0/operations/14.1.1", "mhlw-6.0/planning/13.1.2"] },
+    { "query": "BCP", "expected": ["mhlw-6.0/governance/3.4.1", "mhlw-6.0/planning/11"] },
+    { "query": "記録媒体 破棄", "expected": ["mhlw-6.0/operations/7.3", "mhlw-6.0/planning/8.3.1"] },
+    { "query": "無線LAN", "expected": ["mhlw-6.0/operations/13.4"] },
+    { "query": "証跡 レビュー", "expected": ["mhlw-6.0/operations/17.1", "mhlw-6.0/planning/5.3"] },
+    { "query": "電子署名 タイムスタンプ", "expected": ["mhlw-6.0/operations/15.1", "mhlw-6.0/operations/15", "mhlw-6.0/planning/14"] },
+    { "query": "職員 教育 訓練", "expected": ["mhlw-6.0/governance/3.2.2", "mhlw-6.0/planning/3.1.6", "mhlw-6.0/planning/7.3"] },
+    { "query": "脆弱性 パッチ", "expected": ["mhlw-6.0/operations/8.2"] },
+    { "query": "不正ソフトウェア対策", "expected": ["mhlw-6.0/operations/8.1"] },
+    { "query": "第三者提供 責任", "expected": ["mhlw-6.0/governance/1.4", "mhlw-6.0/planning/2.2.3", "mhlw-6.0/operations/3.5"] },
+    { "query": "情報セキュリティ方針", "expected": ["mhlw-6.0/planning/1.2.1", "mhlw-6.0/governance/3.2.1"] },
+    { "query": "CSIRT", "expected": ["mhlw-6.0/planning/3.1.5"] },
+    { "query": "情報機器 棚卸", "expected": ["mhlw-6.0/operations/8.4"] },
+    { "query": "サーバルーム 入退室", "expected": ["mhlw-6.0/operations/12.1"] },
+    { "query": "アクセス権限 管理", "expected": ["mhlw-6.0/operations/14.2"] },
+    { "query": "紙 スキャナ 電子化", "expected": ["mhlw-6.0/planning/16", "mhlw-6.0/operations/16.1", "mhlw-6.0/operations/16.2"] },
+    { "query": "安全管理義務", "guideline": "mic-meti-2.0", "expected": ["mic-meti-2.0/main/3.1.1"] },
+    { "query": "リスクコミュニケーション", "guideline": "mic-meti-2.0", "expected": ["mic-meti-2.0/main/5.1.6"] },
+    { "query": "医療機関等へ情報提供すべき項目", "guideline": "mic-meti-2.0", "expected": ["mic-meti-2.0/main/4.1"] },
+    { "query": "第三者認証", "guideline": "mic-meti-2.0", "expected": ["mic-meti-2.0/main/4.4"] },
+    { "query": "外部保存", "guideline": "mic-meti-2.0", "expected": ["mic-meti-2.0/main/6.5"] }
+  ]
+}

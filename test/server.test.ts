@@ -42,12 +42,34 @@ describe("MCP server (同梱データ)", () => {
     assert.match(body.disclaimer, /判定するものではありません/);
   });
 
-  it("get_requirement は遵守事項を項目ごとに返す", async () => {
+  it("get_requirement は遵守事項を id 付きで項目ごとに返す", async () => {
     const { body } = await call("get_requirement", { id: "mhlw-6.0/operations/3" });
     assert.equal(body.heading, "3 責任分界[Ⅰ～Ⅳ]");
     assert.equal(body.requirements.length, 5);
-    assert.match(body.requirements[0], /^①/);
+    assert.equal(body.requirements[1].id, "mhlw-6.0/operations/3#2");
+    assert.match(body.requirements[1].text, /^②/);
     assert.ok(body.children.includes("mhlw-6.0/operations/3.1"));
+  });
+
+  it("get_requirement は #番号 で遵守事項 1 項目を返す（グループ付きの番号も）", async () => {
+    const one = await call("get_requirement", { id: "mhlw-6.0/operations/3#2" });
+    assert.match(one.body.text, /^②/);
+    assert.equal(one.body.section, "mhlw-6.0/operations/3");
+    assert.match(one.body.sourceUrl, /^https:\/\//);
+
+    const grouped = await call("get_requirement", { id: "mhlw-6.0/governance/1.2.1#2.1" });
+    assert.equal(grouped.body.group, "＜管理責任＞");
+    assert.match(grouped.body.text, /^①/);
+
+    const missing = await call("get_requirement", { id: "mhlw-6.0/operations/3#99" });
+    assert.equal(missing.isError, true);
+  });
+
+  it("search_requirements は語を含む遵守事項の id を返す", async () => {
+    const { body } = await call("search_requirements", { query: "無線LAN", guideline: "mhlw-6.0", k: 5 });
+    const ops13 = body.hits.find((h: { id: string }) => h.id === "mhlw-6.0/operations/13");
+    assert.ok(ops13, JSON.stringify(body.hits.map((h: { id: string }) => h.id)));
+    assert.ok(ops13.matchedRequirements.includes("mhlw-6.0/operations/13#13"));
   });
 
   it("存在しない id はエラーで返す", async () => {

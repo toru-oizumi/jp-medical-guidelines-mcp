@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { Store } from "./store.js";
+import { requirementsOf, Store } from "./store.js";
 
 const DISCLAIMER =
   "本ツールが返すのは公開ガイドラインの該当箇所です。準拠の可否を判定するものではありません。" +
@@ -82,15 +82,31 @@ export async function createServer(store?: Store): Promise<McpServer> {
       title: "条項を取得する",
       description:
         "条項 id を指定して本文を取得する。search_requirements の結果を掘るときに使う。" +
-        "requirements には【遵守事項】が 1 項目ずつ入る。",
-      inputSchema: { id: z.string().describe('例: "mhlw-6.0/operations/3"') },
+        "requirements には【遵守事項】が 1 項目ずつ id 付きで入る。" +
+        "遵守事項 1 項目だけを引くときは id に「#番号」を付ける（例: mhlw-6.0/operations/3#2）。",
+      inputSchema: { id: z.string().describe('例: "mhlw-6.0/operations/3" / "mhlw-6.0/operations/3#2"') },
       annotations: { readOnlyHint: true },
     },
     async ({ id }) => {
+      if (id.includes("#")) {
+        const r = store.getRequirement(id);
+        if (!r) return text({ error: `not found: ${id}` }, true);
+        return text({
+          ...r.requirement,
+          section: r.section.id,
+          guideline: r.section.guideline,
+          book: r.section.book,
+          heading: r.section.heading,
+          sourceUrl: r.section.sourceUrl,
+          page: r.section.page,
+          disclaimer: DISCLAIMER,
+        });
+      }
       const s = store.get(id);
       if (!s) return text({ error: `not found: ${id}` }, true);
       return text({
         ...s,
+        requirements: requirementsOf(s),
         disclaimer: DISCLAIMER,
         children: store.children(s).map((x) => x.id),
         siblings: store.siblings(s).map((x) => x.id),
@@ -119,7 +135,7 @@ export async function createServer(store?: Store): Promise<McpServer> {
             id: s.id,
             book: s.book,
             heading: s.heading,
-            requirements: s.requirements,
+            requirements: requirementsOf(s),
             sourceUrl: s.sourceUrl,
             page: s.page,
           })),
