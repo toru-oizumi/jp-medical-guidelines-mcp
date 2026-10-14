@@ -26,7 +26,7 @@
 |---|---|
 | `list_sections` | 編・章立ての一覧。どこを掘るか決める |
 | `search_requirements` | キーワードで遵守事項を引く。抜粋と出典つき |
-| `get_requirement` | 条項 id を指定して本文を取得。【遵守事項】は `requirements` に 1 項目ずつ入る |
+| `get_requirement` | 条項 id を指定して本文を取得。【遵守事項】は `requirements` に id 付きで 1 項目ずつ入る。`id#番号` で 1 項目だけ引ける |
 | `list_requirements` | 編ごとに【遵守事項】を一覧する |
 | `get_checklist` | 厚労省チェックリストを構造化して返す（医療機関用 / 事業者用） |
 
@@ -36,6 +36,8 @@ Resource: `guideline://{guideline}/{book}/{path}` で本文を直接読めます
 ページ番号は改定で動くので id には使っていません。
 
 - 番号の無い前付（【はじめに】）は `0`、章の後ろの付録・用語集は `appendix-N` です。
+- 遵守事項 1 項目の id は `節 id#丸数字の番号`（例 `mhlw-6.0/operations/3#2` が ②）。
+  ＜説明責任＞ などのグループごとに番号が振り直される節は `#グループの出現順.番号`（例 `mhlw-6.0/governance/1.2.1#2.1`）です。
 - 総務省・経産省 GL は章番号などが PDF のテキスト層に無い（描画のみ）ため、目次の並びから番号を補っています。
   補った節には `numberInferred: true` が付きます。
 
@@ -48,6 +50,16 @@ npm test
 ```
 
 Node.js 22.13 以上が必要です。
+
+### 検索の評価
+
+```bash
+npx tsx scripts/eval-search.ts --verbose
+```
+
+`test/fixtures/search-eval.json` のクエリで hit@5 と MRR を出します。`npm test` にも閾値つきで入っています。
+採点を変えるときはクエリを足してから比べてください。
+言い換え（「リモートアクセス」→ 原文の「外部からのアクセス」など）は `src/synonyms.ts` にあります。
 
 ### データを作り直す
 
