@@ -51,6 +51,20 @@ describe("data/sections", async () => {
     }
   });
 
+  it("義務文は本文に含まれ、o1 から連番。前付・付録には付けない", () => {
+    const flat = (t: string) => t.replace(/\s+/g, "");
+    for (const s of store.sections) {
+      if (!s.obligations) continue;
+      assert.ok(!/\/(?:0|appendix-\d+)$/.test(s.id), s.id);
+      assert.deepEqual(
+        s.obligations.map((o) => o.no),
+        s.obligations.map((_, i) => `o${i + 1}`),
+        s.id,
+      );
+      for (const o of s.obligations) assert.ok(flat(s.text).includes(flat(o.text)), `${s.id}#${o.no}`);
+    }
+  });
+
   it("出典 URL を持つ", () => {
     for (const s of store.sections) assert.match(s.sourceUrl, /^https:\/\//, s.id);
   });

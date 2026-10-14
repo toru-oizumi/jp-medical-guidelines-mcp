@@ -23,6 +23,11 @@ export interface Section {
   text: string;
   /** 【遵守事項】の ①②… を 1 項目ずつ。遵守事項の無い節は空配列 */
   requirements: RequirementData[];
+  /**
+   * 【遵守事項】の枠が無いガイドライン（総務省・経産省 GL）で、文末表現から機械的に抜き出した義務文。
+   * 公式の遵守事項ではない。抜き出しを行わないガイドラインでは undefined
+   */
+  obligations?: ObligationData[];
   /** 原本 PDF のページ（1 始まり、抽出時点の参考値） */
   page: number | null;
   sourceUrl: string;
@@ -50,6 +55,8 @@ export interface SearchHit {
   score: number;
   /** 検索語を含む遵守事項の id（例 "mhlw-6.0/operations/3#2"） */
   matchedRequirements: string[];
+  /** 検索語を含む義務文の id（例 "mic-meti-2.0/main/4.4#o1"） */
+  matchedObligations: string[];
   sourceUrl: string;
   page: number | null;
 }
@@ -69,5 +76,27 @@ export interface RequirementData {
 
 /** 遵守事項 1 項目。id は「節 id + # + no」（例 "mhlw-6.0/operations/3#2"） */
 export interface Requirement extends RequirementData {
+  id: string;
+}
+
+/**
+ * 文末表現による義務の強さ。
+ * must=「〜すること」「〜しなければならない」、should=「〜べきである」「〜必要がある」「〜求められる」、
+ * recommended=「〜が望ましい」
+ */
+export type ObligationLevel = "must" | "should" | "recommended";
+
+/** data/sections に保存する義務文 1 件 */
+export interface ObligationData {
+  /** 節の中の通し番号（"o1"…） */
+  no: string;
+  level: ObligationLevel;
+  /** 文の主語として読み取れたもの */
+  subject: "対象事業者" | "医療機関等" | null;
+  text: string;
+}
+
+/** 義務文 1 件。id は「節 id + # + no」（例 "mic-meti-2.0/main/4.4#o1"） */
+export interface Obligation extends ObligationData {
   id: string;
 }

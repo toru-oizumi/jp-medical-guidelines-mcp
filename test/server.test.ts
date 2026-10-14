@@ -65,6 +65,21 @@ describe("MCP server (同梱データ)", () => {
     assert.equal(missing.isError, true);
   });
 
+  it("総務省 GL は義務文（obligations）を返し、公式の遵守事項ではない旨を添える", async () => {
+    const { body } = await call("get_requirement", { id: "mic-meti-2.0/main/4.4#o1" });
+    assert.equal(body.kind, "obligation");
+    assert.match(body.text, /プライバシーマーク認定またはISMS認証を取得すること。$/);
+    assert.equal(body.level, "must");
+    assert.equal(body.subject, "対象事業者");
+    assert.match(body.disclaimer, /公式の遵守事項ではなく/);
+
+    const list = await call("list_requirements", { guideline: "mic-meti-2.0", level: "recommended" });
+    assert.ok(list.body.items.length > 0);
+    for (const item of list.body.items) {
+      assert.ok(item.obligations.every((o: { level: string }) => o.level === "recommended"));
+    }
+  });
+
   it("search_requirements は語を含む遵守事項の id を返す", async () => {
     const { body } = await call("search_requirements", { query: "無線LAN", guideline: "mhlw-6.0", k: 5 });
     const ops13 = body.hits.find((h: { id: string }) => h.id === "mhlw-6.0/operations/13");

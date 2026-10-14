@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expand } from "./synonyms.js";
-import type { ChecklistItem, Requirement, Section, SearchHit } from "./types.js";
+import type { ChecklistItem, Obligation, Requirement, Section, SearchHit } from "./types.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 /** dist/ からも src/ からも data/ を引けるようにする */
@@ -64,13 +64,24 @@ export class Store {
     return this.byId.get(id);
   }
 
-  /** "節 id#番号" で遵守事項 1 項目を引く */
-  getRequirement(id: string): { section: Section; requirement: Requirement } | undefined {
-    const m = /^(.+)#(\d+(?:\.\d+)?)$/.exec(id);
+  /** "節 id#番号" で遵守事項 1 項目、"節 id#o番号" で義務文 1 件を引く */
+  getItem(
+    id: string,
+  ):
+    | { kind: "requirement"; section: Section; item: Requirement }
+    | { kind: "obligation"; section: Section; item: Obligation }
+    | undefined {
+    const m = /^(.+)#(o?\d+(?:\.\d+)?)$/.exec(id);
     if (!m) return undefined;
     const section = this.byId.get(m[1]!);
-    const requirement = section && requirementsOf(section).find((r) => r.no === m[2]);
-    return section && requirement ? { section, requirement } : undefined;
+    if (!section) return undefined;
+    const no = m[2]!;
+    if (no.startsWith("o")) {
+      const item = obligationsOf(section).find((o) => o.no === no);
+      return item && { kind: "obligation", section, item };
+    }
+    const item = requirementsOf(section).find((r) => r.no === no);
+    return item && { kind: "requirement", section, item };
   }
 
   /** 同じ親を持つ節（自分を含む） */
@@ -170,6 +181,9 @@ export class Store {
         matchedRequirements: requirementsOf(s)
           .filter((r) => groups.some((g) => g.some((v) => normalize(r.text).includes(v))))
           .map((r) => r.id),
+        matchedObligations: obligationsOf(s)
+          .filter((o) => groups.some((g) => g.some((v) => normalize(o.text).includes(v))))
+          .map((o) => o.id),
         sourceUrl: s.sourceUrl,
         page: s.page,
       });
@@ -181,6 +195,11 @@ export class Store {
 /** 節の遵守事項に id を振る */
 export function requirementsOf(s: Section): Requirement[] {
   return s.requirements.map((r) => ({ id: `${s.id}#${r.no}`, ...r }));
+}
+
+/** 節の義務文に id を振る */
+export function obligationsOf(s: Section): Obligation[] {
+  return (s.obligations ?? []).map((o) => ({ id: `${s.id}#${o.no}`, ...o }));
 }
 
 const BM25_K1 = 1.2;

@@ -14,6 +14,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { readLines } from "./lib/pdf.js";
+import { extractObligations } from "./lib/obligations.js";
 import { buildSections, parseToc, tocPages } from "./lib/structure.js";
 
 const DATA = new URL("../data/", import.meta.url).pathname;
@@ -21,7 +22,14 @@ const RAW = join(DATA, "raw");
 const OUT = join(DATA, "sections");
 
 type Doc = { key: string; book: string; url: string | null; localFile?: string };
-type Guideline = { id: string; edition: string; landingPage: string; documents: Doc[] };
+type Guideline = {
+  id: string;
+  edition: string;
+  landingPage: string;
+  documents: Doc[];
+  /** 【遵守事項】の枠が無いガイドラインで、義務を表す文を機械的に抜き出すか */
+  extractObligations?: boolean;
+};
 const sources = JSON.parse(await readFile(join(DATA, "sources.json"), "utf8")) as {
   guidelines: Guideline[];
 };
@@ -59,6 +67,10 @@ for (const g of sources.guidelines) {
         ...(s.numberInferred ? { numberInferred: true } : {}),
         text: s.text,
         requirements: s.requirements,
+        // 前付・付録（用語集等）は対象外
+        ...(g.extractObligations && /^\d/.test(s.num) && s.num !== "0"
+          ? { obligations: extractObligations(s.text) }
+          : {}),
         page: s.page,
         sourceUrl: doc.url ?? g.landingPage,
       });
