@@ -22,7 +22,7 @@ export interface Section {
   numberInferred?: boolean;
   text: string;
   /** 【遵守事項】の ①②… を 1 項目ずつ。遵守事項の無い節は空配列 */
-  requirements: string[];
+  requirements: RequirementData[];
   /** 原本 PDF のページ（1 始まり、抽出時点の参考値） */
   page: number | null;
   sourceUrl: string;
@@ -48,6 +48,26 @@ export interface SearchHit {
   /** 一致箇所の抜粋（原文ママ） */
   quote: string;
   score: number;
+  /** 検索語を含む遵守事項の id（例 "mhlw-6.0/operations/3#2"） */
+  matchedRequirements: string[];
   sourceUrl: string;
   page: number | null;
+}
+
+/** data/sections に保存する遵守事項 1 項目 */
+export interface RequirementData {
+  /**
+   * 丸数字の番号（①→"1"）。＜説明責任＞ などのグループごとに番号が振り直される節では
+   * 「グループの出現順.番号」（例 "2.1"）
+   */
+  no: string;
+  /** グループ見出し（例 "＜管理責任＞"）。無ければ null */
+  group: string | null;
+  /** 原文。下位リスト（(1)・a・－ 等）は改行で区切る */
+  text: string;
+}
+
+/** 遵守事項 1 項目。id は「節 id + # + no」（例 "mhlw-6.0/operations/3#2"） */
+export interface Requirement extends RequirementData {
+  id: string;
 }

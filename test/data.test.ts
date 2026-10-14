@@ -31,11 +31,23 @@ describe("data/sections", async () => {
   });
 
   it("遵守事項は丸数字で始まり、本文に含まれる", () => {
+    const flat = (t: string) => t.replace(/\s+/g, "");
     for (const s of store.sections) {
       for (const r of s.requirements) {
-        assert.match(r, /^[①-⑳㉑-㉟]/, s.id);
-        assert.ok(s.text.includes(r), s.id);
+        assert.match(r.text, /^[①-⑳㉑-㉟]/, s.id);
+        assert.ok(flat(s.text).includes(flat(r.text)), `${s.id}#${r.no}`);
       }
+    }
+  });
+
+  it("遵守事項の番号はグループごとに 1 から連番（取りこぼし・誤分割の検知）", () => {
+    for (const s of store.sections) {
+      const byGroup = new Map<string, number[]>();
+      for (const r of s.requirements) {
+        const [g, n] = r.no.includes(".") ? r.no.split(".") : ["", r.no];
+        byGroup.set(g!, [...(byGroup.get(g!) ?? []), Number(n)]);
+      }
+      for (const [g, nos] of byGroup) assert.deepEqual(nos, nos.map((_, i) => i + 1), `${s.id} group=${g}`);
     }
   });
 

@@ -38,7 +38,7 @@ export interface BuiltSection {
   numberInferred: boolean;
   page: number;
   text: string;
-  requirements: string[];
+  requirements: ExtractedRequirement[];
 }
 
 export interface BuildReport {
@@ -223,7 +223,7 @@ export function buildSections(
       numberInferred: cur.entry.numberInferred,
       page: cur.page,
       text,
-      requirements: splitRequirements(text),
+      requirements: extractRequirements(cur.lines),
     });
   };
 
@@ -332,6 +332,12 @@ export function containment(want: string, got: string): number {
 }
 
 /**
+ * 段落の頭になる記号。丸数字の直後が助詞等のもの（「①に関して」「⑤で承認を得た」）は
+ * 項目の頭ではなく、折り返した行の先頭に来た参照なので除く。
+ */
+const BULLET = /^(?:[①-⑳㉑-㉟](?![にでのをとがは、及並又へ])|[【＜<\[［•●⚫※]|[(（]\d+[)）])/;
+
+/**
  * 日本語の折り返しを戻して段落にする。
  * - 箇条記号・【】で始まる行は段落の頭
  * - 段落の頭より右にある行は、ぶら下げインデントの続き（①… の 2 行目以降）
@@ -348,7 +354,7 @@ export function toParagraphs(lines: Line[]): string {
   let startPage = -1;
   for (const l of lines) {
     const t = l.text.trim();
-    const bullet = /^(?:[①-⑳㉑-㉟]|[【＜<\[［•●⚫※]|[(（]\d+[)）])/.test(t);
+    const bullet = BULLET.test(t);
     const hanging = l.page === startPage && l.x > startX + 4;
     const indented = l.x > left.get(l.page)! + 4;
     if (paras.length === 0 || bullet || (!hanging && indented)) {
@@ -362,18 +368,89 @@ export function toParagraphs(lines: Line[]): string {
   return paras.join("\n");
 }
 
-/** 【遵守事項】の ①②… を 1 項目ずつに分ける */
-export function splitRequirements(text: string): string[] {
-  const start = text.indexOf("【遵守事項】");
+export interface ExtractedRequirement {
+  /** 丸数字の番号。＜＞のグループがある節は「グループ番号.番号」（例 "2.1"） */
+  no: string;
+  /** ＜説明責任＞ などのグループ見出し。無ければ null */
+  group: string | null;
+  text: string;
+}
+
+/**
+ * 【遵守事項】の枠から項目を取り出す。段落テキストではなく行の x 座標で判定する。
+ *
+ * - 枠の見出し「【遵守事項】」の x を枠の左端、最初の丸数字の行の x を項目の頭の位置とする
+ * - 項目の頭の位置にある丸数字の行だけが新しい項目。それより右の丸数字は入れ子（企画管理編 14 など）
+ * - 項目の頭より右の行は、折り返し・下位リスト・改ページ後の続きとして直前の項目に足す
+ * - ＜…＞ だけの行（枠の内側）はグループ見出し。グループごとに丸数字が振り直される（経営管理編 1.2.1 など）
+ * - 枠の左端より左の行、または項目の頭付近にある丸数字以外の行で枠の終わりとみなす
+ */
+export function extractRequirements(lines: Line[]): ExtractedRequirement[] {
+  const start = lines.findIndex((l) => nfkc(l.text).trim() === "【遵守事項】");
   if (start < 0) return [];
-  const after = text.slice(start + "【遵守事項】".length);
-  const out: string[] = [];
-  for (const para of after.split("\n")) {
-    const t = para.trim();
-    if (!t) continue;
-    if (/^[①-⑳㉑-㉟]/.test(t)) out.push(t);
-    else if (out.length > 0 && /^【/.test(t)) break;
-    else if (out.length > 0) break;
+  const boxX = lines[start]!.x;
+  const body = lines.slice(start + 1);
+  const firstItem = body.find((l) => isItemHead(l.text));
+  if (!firstItem) return [];
+  const itemX = firstItem.x;
+
+  const items: { group: string | null; groupNo: number; parts: string[] }[] = [];
+  let group: string | null = null;
+  let groupNo = 0;
+  let cur: (typeof items)[number] | null = null;
+
+  for (const l of body) {
+    const t = l.text.trim();
+    if (/^【/.test(t) || l.x < boxX - 2) break;
+    if (/^[＜<][^＞>➢]+[＞>]$/.test(t) && l.x <= itemX + 2) {
+      group = t;
+      groupNo++;
+      cur = null;
+      continue;
+    }
+    if (Math.abs(l.x - itemX) <= 2 && isItemHead(t)) {
+      cur = { group, groupNo, parts: [t] };
+      items.push(cur);
+      continue;
+    }
+    if (cur && l.x >= itemX + 3) {
+      cur.parts.push(t);
+      continue;
+    }
+    break;
+  }
+
+  const counters = new Map<number, number>();
+  return items.map((it) => {
+    const seq = (counters.get(it.groupNo) ?? 0) + 1;
+    counters.set(it.groupNo, seq);
+    const n = circledNumber(it.parts[0]!) ?? seq;
+    return {
+      no: groupNo > 0 ? `${it.groupNo}.${n}` : String(n),
+      group: it.group,
+      text: joinItem(it.parts),
+    };
+  });
+}
+
+function isItemHead(text: string): boolean {
+  const t = text.trim();
+  return /^[①-⑳㉑-㉟]/.test(t) && BULLET.test(t);
+}
+
+export function circledNumber(text: string): number | null {
+  const cp = text.trim().codePointAt(0) ?? 0;
+  if (cp >= 0x2460 && cp <= 0x2473) return cp - 0x2460 + 1; // ①〜⑳
+  if (cp >= 0x3251 && cp <= 0x325f) return cp - 0x3251 + 21; // ㉑〜㉟
+  return null;
+}
+
+/** 項目の行を結合する。下位リスト（(1)・a・・・※・－・入れ子の丸数字）は改行して残す */
+function joinItem(parts: string[]): string {
+  let out = parts[0]!;
+  for (const p of parts.slice(1)) {
+    const sub = /^(?:[(（][0-9０-９a-zａ-ｚ]+[)）]|\d+[.．]|[a-zａ-ｚ](?![a-zA-Z])|[・※－―➢]|[①-⑳㉑-㉟](?![にでのをとがは、及並又へ～〜]))/.test(p);
+    out += sub ? `\n${p}` : p;
   }
   return out;
 }
