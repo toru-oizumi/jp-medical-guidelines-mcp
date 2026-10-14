@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { Store } from "./store.js";
@@ -6,15 +7,28 @@ const DISCLAIMER =
   "本ツールが返すのは公開ガイドラインの該当箇所です。準拠の可否を判定するものではありません。" +
   "最終的な確認は source_url の原本 PDF で行ってください。";
 
-export async function createServer(): Promise<McpServer> {
-  const store = await Store.load();
+const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as {
+  version: string;
+};
+
+export async function createServer(store?: Store): Promise<McpServer> {
+  store ??= await Store.load();
+
+  const ids = store.guidelines.map((g) => g.id);
+  // 収録しているガイドラインは data/ の中身で決まる。空のときに z.enum([]) は作れないので string に落とす
+  const guidelineArg = (ids.length > 0 ? z.enum(ids as [string, ...string[]]) : z.string()).describe(
+    `ガイドライン id。収録: ${ids.join(", ") || "(なし)"}`,
+  );
+  const covered = store.guidelines
+    .map((g) => `${g.id}: ${g.publisher}「${g.title}」第${g.edition}版`)
+    .join(" / ");
 
   const server = new McpServer(
-    { name: "jp-medical-guidelines-mcp", version: "0.1.0" },
+    { name: "jp-medical-guidelines-mcp", version: pkg.version },
     {
       instructions:
-        "日本の医療情報に関する「3省2ガイドライン」（厚生労働省 医療情報システムの安全管理に関するガイドライン 第7.0版 / " +
-        "総務省・経済産業省 医療情報を取り扱う情報システム・サービスの提供事業者における安全管理ガイドライン 第2.0版）の本文を引くサーバ。" +
+        "日本の医療情報に関する「3省2ガイドライン」の本文を引くサーバ。" +
+        `収録: ${covered || "(データ未生成)"}。` +
         "回答には必ず条項 id と source_url を添えること。準拠可否の判断はこのサーバの役割ではない。",
     },
   );
@@ -25,19 +39,21 @@ export async function createServer(): Promise<McpServer> {
       title: "目次を返す",
       description: "ガイドラインの編・章立てを一覧する。どの編を掘るか決めるために最初に呼ぶ。",
       inputSchema: {
-        guideline: z.enum(["mhlw-7.0", "mic-meti-2.0"]).optional(),
+        guideline: guidelineArg.optional(),
+        depth: z.number().int().min(1).max(4).default(2).describe("何階層目まで返すか"),
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ guideline }) => {
+    async ({ guideline, depth }) => {
       const books = new Map<string, { guideline: string; book: string; headings: string[] }>();
       for (const s of store.sections) {
         if (guideline && s.guideline !== guideline) continue;
         const key = `${s.guideline}/${s.book}`;
-        if (!books.has(key)) books.set(key, { guideline: s.guideline, book: s.book, headings: [] });
-        if (s.headingPath.length <= 2) books.get(key)!.headings.push(`${s.id}  ${s.heading}`);
+        let b = books.get(key);
+        if (!b) books.set(key, (b = { guideline: s.guideline, book: s.book, headings: [] }));
+        if (s.headingPath.length <= depth) b.headings.push(`${s.id}  ${s.heading}`);
       }
-      return text([...books.values()]);
+      return text({ guidelines: store.guidelines, books: [...books.values()] });
     },
   );
 
@@ -50,7 +66,7 @@ export async function createServer(): Promise<McpServer> {
         "回答を書くときは quote をそのまま引用し、source_url を必ず併記すること。",
       inputSchema: {
         query: z.string().describe("例: 外部委託 責任分界 / リモートアクセス 認証 / バックアップ 世代管理"),
-        guideline: z.enum(["mhlw-7.0", "mic-meti-2.0"]).optional(),
+        guideline: guidelineArg.optional(),
         book: z.string().optional().describe("編で絞る。例: システム運用編"),
         k: z.number().int().min(1).max(30).default(8),
       },
@@ -64,18 +80,50 @@ export async function createServer(): Promise<McpServer> {
     "get_requirement",
     {
       title: "条項を取得する",
-      description: "条項 id を指定して本文を取得する。search_requirements の結果を掘るときに使う。",
-      inputSchema: { id: z.string().describe('例: "mhlw-7.0/operations/4.2.1"') },
+      description:
+        "条項 id を指定して本文を取得する。search_requirements の結果を掘るときに使う。" +
+        "requirements には【遵守事項】が 1 項目ずつ入る。",
+      inputSchema: { id: z.string().describe('例: "mhlw-6.0/operations/3"') },
       annotations: { readOnlyHint: true },
     },
     async ({ id }) => {
       const s = store.get(id);
       if (!s) return text({ error: `not found: ${id}` }, true);
-      const siblings = store.sections
-        .filter((x) => x.book === s.book && x.headingPath.length === s.headingPath.length)
-        .map((x) => x.id);
-      return text({ ...s, disclaimer: DISCLAIMER, siblings });
+      return text({
+        ...s,
+        disclaimer: DISCLAIMER,
+        children: store.children(s).map((x) => x.id),
+        siblings: store.siblings(s).map((x) => x.id),
+      });
     },
+  );
+
+  server.registerTool(
+    "list_requirements",
+    {
+      title: "遵守事項を一覧する",
+      description:
+        "【遵守事項】のある節について、遵守事項を項目ごとに一覧する。編単位の棚卸しに使う。",
+      inputSchema: {
+        guideline: guidelineArg,
+        book: z.string().optional().describe("編で絞る。例: 企画管理編"),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ guideline, book }) =>
+      text({
+        disclaimer: DISCLAIMER,
+        items: store.sections
+          .filter((s) => s.guideline === guideline && (!book || s.book === book) && s.requirements.length > 0)
+          .map((s) => ({
+            id: s.id,
+            book: s.book,
+            heading: s.heading,
+            requirements: s.requirements,
+            sourceUrl: s.sourceUrl,
+            page: s.page,
+          })),
+      }),
   );
 
   server.registerTool(
@@ -91,13 +139,15 @@ export async function createServer(): Promise<McpServer> {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ target, category }) =>
-      text({
-        disclaimer: DISCLAIMER,
-        items: store.checklists.filter(
-          (c) => c.target === target && (!category || c.category.includes(category)),
-        ),
-      }),
+    async ({ target, category }) => {
+      const items = store.checklists.filter(
+        (c) => c.target === target && (!category || c.category.includes(category)),
+      );
+      if (store.checklists.length === 0) {
+        return text({ error: "チェックリストのデータが未生成です（npm run data を参照）" }, true);
+      }
+      return text({ disclaimer: DISCLAIMER, items });
+    },
   );
 
   server.registerResource(

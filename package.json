@@ -9,7 +9,10 @@
   },
   "files": [
     "dist",
-    "data",
+    "data/sections",
+    "data/checklists",
+    "data/sources.json",
+    "data/NOTICE.md",
     "README.md",
     "LICENSE"
   ],
@@ -24,7 +27,8 @@
     "extract": "tsx scripts/extract.ts",
     "xlsx": "tsx scripts/xlsx.ts",
     "data": "npm run fetch && npm run extract && npm run xlsx",
-    "check-updates": "tsx scripts/check-updates.ts"
+    "check-updates": "tsx scripts/check-updates.ts",
+    "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
