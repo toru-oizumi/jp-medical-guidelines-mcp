@@ -2,8 +2,15 @@
 
 日本の医療情報に関する通称 **3省2ガイドライン** の本文を、MCP 経由で引くためのサーバです。
 
-- 厚生労働省「医療情報システムの安全管理に関するガイドライン」**第7.0版**（令和8年6月）
-- 総務省・経済産業省「医療情報を取り扱う情報システム・サービスの提供事業者における安全管理ガイドライン」**第2.0版**（令和7年3月改定）
+同梱データ（`data/sections/`）に収録しているのは次の版です。
+
+| id | ガイドライン | 版 | 原本 |
+|---|---|---|---|
+| `mhlw-6.0` | 厚生労働省「医療情報システムの安全管理に関するガイドライン」 | 第6.0版（令和5年5月） | `data/guideline/` の同梱 PDF |
+| `mic-meti-2.0` | 総務省・経済産業省「医療情報を取り扱う情報システム・サービスの提供事業者における安全管理ガイドライン」 | 第2.0版（令和7年3月改定） | 同上 |
+
+`data/sources.json` には厚労省 **第7.0版**（`mhlw-7.0`）のエントリもありますが、原本を取得できていないためデータは未生成です
+（[docs/STATUS.md](docs/STATUS.md) の「要確認」を参照）。
 
 ## これは何をしないか
 
@@ -19,23 +26,41 @@
 |---|---|
 | `list_sections` | 編・章立ての一覧。どこを掘るか決める |
 | `search_requirements` | キーワードで遵守事項を引く。抜粋と出典つき |
-| `get_requirement` | 条項 id を指定して本文を取得 |
+| `get_requirement` | 条項 id を指定して本文を取得。【遵守事項】は `requirements` に 1 項目ずつ入る |
+| `list_requirements` | 編ごとに【遵守事項】を一覧する |
 | `get_checklist` | 厚労省チェックリストを構造化して返す（医療機関用 / 事業者用） |
 
 Resource: `guideline://{guideline}/{book}/{path}` で本文を直接読めます。
 
-条項 id は**見出し番号ベース**です（例 `mhlw-7.0/operations/4.2.1`）。
+条項 id は**見出し番号ベース**です（例 `mhlw-6.0/operations/4.2.1`）。
 ページ番号は改定で動くので id には使っていません。
+
+- 番号の無い前付（【はじめに】）は `0`、章の後ろの付録・用語集は `appendix-N` です。
+- 総務省・経産省 GL は章番号などが PDF のテキスト層に無い（描画のみ）ため、目次の並びから番号を補っています。
+  補った節には `numberInferred: true` が付きます。
 
 ## セットアップ
 
 ```bash
 npm install
-npm run data     # 原本の取得 → PDF/Excel の構造化。data/ が生成される
 npm run build
+npm test
 ```
 
-`npm run data` は各省のサイトに直接アクセスします。data/raw/ は git 管理外です。
+Node.js 22.13 以上が必要です。
+
+### データを作り直す
+
+```bash
+npm run extract  # 同梱 PDF（sources.json の localFile）または data/raw/ から data/sections/ を作る
+npm run data     # 原本の取得 → PDF/Excel の構造化をまとめて行う（各省のサイトに直接アクセスする）
+```
+
+data/raw/ は git 管理外です。`data/raw/<id>__<key>.pdf` があればそちらを優先し、無ければ `localFile` を使います。
+
+見出しは本文から推測せず、**目次を正として本文と順に照合**しています（`scripts/lib/structure.ts`）。
+目次と照合できなかった見出しは `npm run extract` の出力に `?` 付きで出るので、改版時は必ず確認してください。
+CI は同梱 PDF から作り直したデータとコミット済みのデータが一致するかを検査します。
 
 ### MCP クライアントの設定
 
@@ -53,11 +78,12 @@ npm run build
 ## データの更新
 
 `data/sources.json` がファイル単位で URL・公表日・SHA-256 を持ちます。
+`watch: false` のガイドライン（旧版）は監視の対象外です。
 厚労省は編ごとに公表日がずれる（第7.0版でも企画管理編だけ令和8年5月）ため、
 ガイドライン単位ではなくファイル単位が最小単位です。
 
 `scripts/check-updates.ts` が掲載ページのリンク集合とハッシュを比較し、
-差分があれば GitHub Actions が Issue を立てます（毎週月曜）。
+差分があれば GitHub Actions が Issue を立てます（毎週月曜。既に Issue があればコメントを追記）。
 
 ## 出典と再配布について
 
@@ -68,8 +94,4 @@ npm run build
 
 ## Status
 
-初期スキャフォールドです。以下は**未検証**です。
-
-- [ ] `scripts/extract.ts` の見出し検出（PDF のレイアウト依存が強い。要目視確認）
-- [ ] `scripts/xlsx.ts` の列マッピング（`npx tsx scripts/xlsx.ts --inspect` で原本の列を見てから調整）
-- [ ] 検索の精度（bigram の素朴な実装。必要なら BM25 か埋め込みに差し替える）
+開発状況・判断が必要な事項・既知の制約は [docs/STATUS.md](docs/STATUS.md) にまとめています。
