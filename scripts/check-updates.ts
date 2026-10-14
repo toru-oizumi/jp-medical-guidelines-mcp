@@ -10,8 +10,8 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const DATA = new URL("../data/", import.meta.url).pathname;
-type Doc = { key: string; url: string; sha256: string | null };
-type Guideline = { id: string; landingPage: string; documents: Doc[]; checklists: Doc[] };
+type Doc = { key: string; url: string | null; sha256: string | null };
+type Guideline = { id: string; watch?: boolean; landingPage: string; documents: Doc[]; checklists: Doc[] };
 
 const sources = JSON.parse(await readFile(join(DATA, "sources.json"), "utf8")) as {
   guidelines: Guideline[];
@@ -20,9 +20,17 @@ const sources = JSON.parse(await readFile(join(DATA, "sources.json"), "utf8")) a
 const findings: string[] = [];
 
 for (const g of sources.guidelines) {
-  const known = new Set([...g.documents, ...g.checklists].map((d) => d.url));
+  // 旧版など、掲載ページの監視対象外にしているもの
+  if (g.watch === false) continue;
+  const docs = [...g.documents, ...g.checklists].filter((d): d is Doc & { url: string } => !!d.url);
+  const known = new Set(docs.map((d) => d.url));
 
-  const html = await (await fetch(g.landingPage)).text();
+  const page = await fetch(g.landingPage);
+  if (!page.ok) {
+    findings.push(`[${g.id}] 掲載ページを取得できない: ${page.status} ${g.landingPage}`);
+    continue;
+  }
+  const html = await page.text();
   const linked = new Set(
     [...html.matchAll(/href="([^"]+\.(?:pdf|xlsx))"/gi)].map((m) =>
       new URL(m[1]!, g.landingPage).href,
@@ -38,7 +46,7 @@ for (const g of sources.guidelines) {
     if (!linked.has(url)) findings.push(`[${g.id}] 掲載ページから消えた: ${url}`);
   }
 
-  for (const doc of [...g.documents, ...g.checklists]) {
+  for (const doc of docs) {
     if (!doc.sha256) continue;
     const res = await fetch(doc.url);
     if (!res.ok) {

@@ -1,109 +1,86 @@
 /**
- * data/raw/*.pdf → data/sections/*.json
+ * 原本 PDF → data/sections/<guideline>.json
  *
- * 見出し番号（1 / 1.2 / 1.2.3）で章節に切る。ページ番号は参考値としてしか持たない。
+ * 見出しは目次（TOC）を正として本文と順に照合する（scripts/lib/structure.ts）。
  * 条項 id は見出し番号ベース: <guideline>/<key>/<番号>
  *
- * NOTE: PDF のレイアウト依存が強い処理なので、初回は必ず出力を目視で確認すること。
- *       図表・脚注は落ちる。落ちたことを NOTICE.md に書いてある。
+ * 原本は data/raw/<guideline>__<key>.pdf（npm run fetch で取得）を優先し、
+ * 無ければ sources.json の localFile（data/ からの相対パス）を使う。
+ *
+ * NOTE: 図表・脚注の上付き番号は落ちる。落ちることを NOTICE.md に書いてある。
+ *       目次と照合できなかった見出しは標準出力に出すので、初回は必ず目視で確認すること。
  */
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
+import { readLines } from "./lib/pdf.js";
+import { buildSections, parseToc, tocPages } from "./lib/structure.js";
 
 const DATA = new URL("../data/", import.meta.url).pathname;
 const RAW = join(DATA, "raw");
 const OUT = join(DATA, "sections");
 
-const HEADING = /^(\d+(?:\.\d+){0,3})[.\s　]+(\S.{0,80})$/;
-
-type Doc = { key: string; book: string; url: string };
-type Guideline = { id: string; edition: string; documents: Doc[] };
+type Doc = { key: string; book: string; url: string | null; localFile?: string };
+type Guideline = { id: string; edition: string; landingPage: string; documents: Doc[] };
 const sources = JSON.parse(await readFile(join(DATA, "sources.json"), "utf8")) as {
   guidelines: Guideline[];
 };
 
 await mkdir(OUT, { recursive: true });
-const rawFiles = await readdir(RAW);
+let failed = false;
 
 for (const g of sources.guidelines) {
   const sections: unknown[] = [];
 
   for (const doc of g.documents) {
-    const file = rawFiles.find((f) => f === `${g.id}__${doc.key}.pdf`);
+    const file = resolveSource(g.id, doc);
     if (!file) {
       console.warn(`skip (not fetched): ${g.id}/${doc.key}`);
       continue;
     }
 
-    const data = new Uint8Array(await readFile(join(RAW, file)));
-    const pdf = await getDocument({ data, useSystemFonts: true }).promise;
+    const { lines, numPages } = await readLines(file);
+    const toc = parseToc(lines, tocPages(lines));
+    if (toc.length === 0) {
+      console.error(`! ${g.id}/${doc.key}: 目次を検出できませんでした`);
+      failed = true;
+      continue;
+    }
+    const { sections: built, report } = buildSections(lines, toc);
 
-    let current: { id: string; heading: string; path: string[]; page: number; lines: string[] } | null = null;
-    const flush = () => {
-      if (!current || current.lines.length === 0) return;
+    for (const s of built) {
       sections.push({
-        id: current.id,
+        id: `${g.id}/${doc.key}/${s.num}`,
         guideline: g.id,
         edition: g.edition,
         book: doc.book,
-        headingPath: current.path,
-        heading: current.heading,
-        text: current.lines.join("\n").trim(),
-        page: current.page,
-        sourceUrl: doc.url,
+        headingPath: s.path,
+        heading: s.heading,
+        ...(s.numberInferred ? { numberInferred: true } : {}),
+        text: s.text,
+        requirements: s.requirements,
+        page: s.page,
+        sourceUrl: doc.url ?? g.landingPage,
       });
-    };
-
-    for (let p = 1; p <= pdf.numPages; p++) {
-      const content = await (await pdf.getPage(p)).getTextContent();
-      const lines = groupByLine(content.items as TextItem[]);
-
-      for (const line of lines) {
-        const m = HEADING.exec(line);
-        if (m) {
-          flush();
-          const num = m[1]!;
-          current = {
-            id: `${g.id}/${doc.key}/${num}`,
-            heading: `${num} ${m[2]!.trim()}`,
-            path: num.split(".").map((_, i, a) => a.slice(0, i + 1).join(".")),
-            page: p,
-            lines: [],
-          };
-        } else if (current) {
-          current.lines.push(line);
-        }
-      }
     }
-    flush();
-    console.log(`${g.id}/${doc.key}: ${pdf.numPages}p`);
+
+    console.log(
+      `${g.id}/${doc.key}: ${numPages}p  toc=${report.tocEntries} matched=${report.matched}` +
+        `  requirements=${built.reduce((n, s) => n + s.requirements.length, 0)}`,
+    );
+    for (const u of report.unmatched) console.log(`  ? 本文で見つからない見出し: ${u}`);
   }
 
+  if (sections.length === 0) continue;
   await writeFile(join(OUT, `${g.id}.json`), JSON.stringify(sections, null, 2) + "\n");
   console.log(`-> data/sections/${g.id}.json  ${sections.length} sections`);
 }
 
-type TextItem = { str: string; transform: number[] };
+if (failed) process.exit(1);
 
-/** y 座標が近いものを 1 行として束ねる。PDF のテキストは行単位で来ないため。 */
-function groupByLine(items: TextItem[]): string[] {
-  const rows = new Map<number, { x: number; str: string }[]>();
-  for (const it of items) {
-    if (!it.str.trim()) continue;
-    const y = Math.round(it.transform[5]!);
-    const key = [...rows.keys()].find((k) => Math.abs(k - y) <= 2) ?? y;
-    (rows.get(key) ?? rows.set(key, []).get(key)!).push({ x: it.transform[4]!, str: it.str });
-  }
-  return [...rows.entries()]
-    .sort((a, b) => b[0] - a[0])
-    .map(([, cells]) =>
-      cells
-        .sort((a, b) => a.x - b.x)
-        .map((c) => c.str)
-        .join("")
-        .replace(/\s+/g, " ")
-        .trim(),
-    )
-    .filter(Boolean);
+function resolveSource(guideline: string, doc: Doc): string | null {
+  const raw = join(RAW, `${guideline}__${doc.key}.pdf`);
+  if (existsSync(raw)) return raw;
+  if (doc.localFile && existsSync(join(DATA, doc.localFile))) return join(DATA, doc.localFile);
+  return null;
 }

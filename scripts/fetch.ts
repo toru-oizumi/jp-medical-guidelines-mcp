@@ -9,7 +9,7 @@ import { join } from "node:path";
 const DATA = new URL("../data/", import.meta.url).pathname;
 const RAW = join(DATA, "raw");
 
-type Doc = { key: string; url: string; sha256: string | null; kind?: string };
+type Doc = { key: string; url: string | null; sha256: string | null; kind?: string };
 type Guideline = { id: string; documents: Doc[]; checklists: Doc[] };
 
 const sources = JSON.parse(await readFile(join(DATA, "sources.json"), "utf8")) as {
@@ -20,6 +20,8 @@ await mkdir(RAW, { recursive: true });
 
 for (const g of sources.guidelines) {
   for (const doc of [...g.documents, ...g.checklists]) {
+    // 原本 URL が未確認のもの（同梱 PDF から作る版）は取得しない
+    if (!doc.url) continue;
     const ext = doc.url.endsWith(".xlsx") ? "xlsx" : "pdf";
     const dest = join(RAW, `${g.id}__${doc.key}.${ext}`);
 
